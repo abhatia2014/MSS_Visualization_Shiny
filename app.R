@@ -1,4 +1,3 @@
-#add to github
 
 # Load required packages --------------------------------------------------
 library(shiny)
