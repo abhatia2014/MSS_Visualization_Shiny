@@ -167,6 +167,19 @@ server=function(input,output,session){
     
   })
   
+  errorall=reactive({
+    
+    period1=input$alertdate[1]
+    period2=input$alertdate[2]
+    interval1=interval(period1,period2)
+    escalated_alerts%>%
+      filter(attack_start_time %within% interval1)%>%
+      mutate(att_Month=lubridate::month(attack_start_time,label=TRUE))%>%
+      group_by(att_Month)%>%
+      summarise(misclass=n())
+    
+  })
+  
   errorrateind=reactive({
     
     cust=input$selectcustomer
@@ -307,11 +320,38 @@ server=function(input,output,session){
         
     } else if (input$radioalert==3){
       
+      escl=c("ASSOCIATED","AUTO_ESCALATED","AUTO_ESCALATION_PENDING","ESCALATED","AUTO_ASSOCIATED")
+
+        custchart=allalerts%>%
+        filter(ai_alert_soc_status %in% escl)%>%
+        group_by(att_Month)%>%
+        summarise(Total_Alerts=sum(Status))
+      
+
+      custchart$att_Month=factor(custchart$att_Month)
+      
+      ggplot(data=custchart,aes(x=att_Month,y=Total_Alerts,fill=att_Month))+geom_bar(stat="identity")+
+        geom_text(aes(att_Month,Total_Alerts,label=Total_Alerts),size=4)+theme(legend.position ='none')+
+        labs(x="Months",y="Escalations")+ggtitle(label = paste("Escalations by month for all customers"))
+      
       
     } else if (input$radioalert==4){
+      errorcust=errorall()
+      
+      
+      ggplot(data=errorcust,aes(x=att_Month,y=misclass,fill=att_Month))+geom_bar(stat="identity")+
+        geom_text(aes(att_Month,misclass,label=misclass),size=4)+theme(legend.position ='none')+
+        
+        labs(x="Months",y="Misclassification")+ggtitle(label = paste("Misclassifications by month for all customers"))
+      
+      
       
       
     } else if (input$radioalert==5){
+      
+      ggplot(allalerts,aes(att_Month,Status,fill=att_Month))+geom_bar(stat='identity')+facet_wrap(~ai_alert_soc_status,nrow = 3)+
+        theme(legend.position = "none")+geom_text(aes(att_Month,Status,label=Status),size=3)+
+        labs(x="Months",y="Alerts generated")+ggtitle(label = paste("Status of all alerts generated for client for all clients"),subtitle = "Alerts faceted by SOC Status type")
       
       
     }
