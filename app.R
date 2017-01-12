@@ -153,6 +153,17 @@ server=function(input,output,session){
     
   })
   
+  alertalltable=reactive({
+    
+    period1=input$alertdate[1]
+    period2=input$alertdate[2]
+    interval1=interval(period1,period2)
+    unique.alerts%>%
+      
+      filter(attack_start_time %within% interval1)%>%
+      mutate(att_Month=lubridate::month(attack_start_time,label=TRUE))
+    
+  })
   errorrate=reactive({
     cust=input$selectcustomer
     period1=input$alertdate[1]
@@ -195,6 +206,20 @@ server=function(input,output,session){
       summarise(misclass=n())
   })
   
+  totalind=reactive({
+    
+    cust=input$selectcustomer
+    clientInd=unique.alerts$industry[unique.alerts$remedy_customer_id==cust]
+    period1=input$alertdate[1]
+    period2=input$alertdate[2]
+    interval1=interval(period1,period2)
+    indnum=unique.alerts %>% 
+      filter(industry==clientInd)%>%
+      filter(attack_start_time %within% interval1)%>%
+      group_by(remedy_customer_id)%>%
+      summarise(count=n())
+  })
+  
  output$custdesc=renderInfoBox({
    cust=input$selectcustomer
    clientInd=unique.alerts$industry[unique.alerts$remedy_customer_id==cust]
@@ -209,78 +234,168 @@ server=function(input,output,session){
   
    output$averagealerts=renderValueBox({
      #browser()
-    cust=input$selectcustomer
-    clientInd=unique.alerts$industry[unique.alerts$remedy_customer_id==cust]
-    avgind=averagealertsind()
-  
-    averageind=round(mean(avgind$Status),0)
+     if (input$selectcustomer=="All"){
+       
+       averagemonthly=totalalert()
+       allaverage=averagemonthly%>%
+         group_by(att_Month) %>% 
+         summarise(Total_Alerts=sum(Status))
+         allaverage=round(mean(allaverage$Total_Alerts),0)
+       
+       valueBox(
+         value = formatC(allaverage,big.mark = ",",format = "d"),
+         subtitle = paste("Average Monthly \n Alerts- MSS"),
+         color="yellow")
+       
+     } else if (input$selectcustomer!="All") {
+       
+       
+       cust=input$selectcustomer
+       clientInd=unique.alerts$industry[unique.alerts$remedy_customer_id==cust]
+       avgind=averagealertsind()
+       avgind=avgind %>% 
+         group_by(att_Month) %>% 
+         summarise(Total_Alerts=mean(Status))
+       
+       averageind=round(mean(avgind$Total_Alerts),0)
+       
+       valueBox(
+         value = averageind,
+         subtitle = paste(clientInd,"Industry Averaged Monthly Alerts"),
+         color="yellow")
+       
+     }
     
-    valueBox(
-      value = averageind,
-      subtitle = paste(clientInd,"Industry Averaged Monthly Alerts"),
-      color="yellow")
   })
    
   output$averageFP=renderValueBox({
     #browser()
-    cust=input$selectcustomer
-    clientInd=unique.alerts$industry[unique.alerts$remedy_customer_id==cust]
-    fp=c("CLOSED","COMMENTED")
-    avgind=averagealertsind()
-    avgind1=avgind%>%
-    summarise(Avg_Alerts=sum(Status))
     
-    avgind=avgind%>%
-      filter(ai_alert_soc_status %in% fp)%>%
-      summarise(Avg_Alerts=sum(Status))
+    if (input$selectcustomer=="All"){
+      allalerts=totalalert()
+      fp=c("CLOSED","COMMENTED")
+      custchart1=allalerts%>%
+        group_by(att_Month)%>%
+        summarise(Total_Alerts=sum(Status))
+      custchart=allalerts%>%
+        filter(ai_alert_soc_status %in% fp)%>%
+        group_by(att_Month)%>%
+        summarise(Total_Alerts=sum(Status))
+      
+      custchart$total=custchart1$Total_Alerts
+      custchart$percent=round(custchart$Total_Alerts/custchart$total*100,1)
+      averagefalsepositive=round(mean(custchart$percent),1)
+      
+      valueBox(
+        value = paste0(averagefalsepositive,"%"),
+        subtitle = paste("Averaged monthly \n False Positives- MSS"),
+        color="purple")
+      
+      
+    } else if (input$selectcustomer!="All"){
+      
+      cust=input$selectcustomer
+      clientInd=unique.alerts$industry[unique.alerts$remedy_customer_id==cust]
+      fp=c("CLOSED","COMMENTED")
+      avgind=averagealertsind()
+      avgind1=avgind%>%
+        summarise(Avg_Alerts=sum(Status))
+      
+      avgind=avgind%>%
+        filter(ai_alert_soc_status %in% fp)%>%
+        summarise(Avg_Alerts=sum(Status))
+      
+      avgind$total=avgind1$Avg_Alerts
+      avgind$avgpercent=round(avgind$Avg_Alerts/avgind$total*100,1)
+      averagefalsepositive=round(mean(avgind$avgpercent),1)
+      
+      valueBox(
+        value = paste0(averagefalsepositive,"%"),
+        subtitle = paste(clientInd,"Industry Averaged monthly False Positives"),
+        color="purple")
+      
+      
+    }
     
-    avgind$total=avgind1$Avg_Alerts
-    avgind$avgpercent=round(avgind$Avg_Alerts/avgind$total*100,1)
-    averagefalsepositive=round(mean(avgind$avgpercent),1)
-    
-    valueBox(
-      value = paste0(averagefalsepositive,"%"),
-      subtitle = paste(clientInd,"Industry Averaged monthly False Positives"),
-      color="purple")
-  
     
     })
   
   output$averageesc=renderValueBox({
     #browser()
-    cust=input$selectcustomer
-    clientInd=unique.alerts$industry[unique.alerts$remedy_customer_id==cust]
-    avgcust=averagealertsind()
-    avgcust=avgcust%>%
-      filter(ai_alert_soc_status %in% escl)%>%
-      summarise(Avg_Alerts=round(mean(Status),0))
-    Avg_Alerts=round(mean(avgcust$Avg_Alerts),0)
-    valueBox(
-      value = Avg_Alerts,
-      subtitle = paste(clientInd,"Industry averaged monthly escalations"),
-      color="olive")
+    
+    if (input$selectcustomer=="All"){
+      
+      allalerts=totalalert()
+      escl=c("ASSOCIATED","AUTO_ESCALATED","AUTO_ESCALATION_PENDING","ESCALATED","AUTO_ASSOCIATED")
+      
+      custchart=allalerts%>%
+        filter(ai_alert_soc_status %in% escl)%>%
+        group_by(att_Month)%>%
+        summarise(Total_Alerts=sum(Status))
+      Avg_Alerts=round(mean(custchart$Total_Alerts),0)
+      
+      valueBox(
+        value = formatC(Avg_Alerts,big.mark = ",",format = "d"),
+        subtitle = paste("Averaged monthly \n escalations- MSS"),
+        color="olive")
+      
+    } else if (input$selectcustomer!="All") {
+      
+      cust=input$selectcustomer
+      clientInd=unique.alerts$industry[unique.alerts$remedy_customer_id==cust]
+      avgcust=averagealertsind()
+      avgcust=avgcust%>%
+        filter(ai_alert_soc_status %in% escl)%>%
+        summarise(Avg_Alerts=round(mean(Status),0))
+      Avg_Alerts=round(mean(avgcust$Avg_Alerts),0)
+      valueBox(
+        value = Avg_Alerts,
+        subtitle = paste(clientInd,"Industry averaged monthly escalations"),
+        color="olive")
+      
+    }
+    
     
   })
   
   output$averageerr=renderValueBox({
     #browser()
-    cust=input$selectcustomer
-    clientInd=unique.alerts$industry[unique.alerts$remedy_customer_id==cust]
-    avgcust=averagealertsind()
-    avgcust=avgcust%>%
-      filter(ai_alert_soc_status %in% escl)%>%
-      summarise(Avg_Alerts=round(mean(Status),0))
-    Avg_Alerts=round(mean(avgcust$Avg_Alerts),0)
-    errorind=errorrateind()
-    errorind=errorind%>%
-      summarise(meanerror=round(mean(misclass),0))
-    meanerror=round(mean(errorind$meanerror),0)
-    errorpercent=round(meanerror/Avg_Alerts*100,1)
-    valueBox(
-      value = meanerror,
-      subtitle = paste(clientInd,"Industry averaged monthly error rates"),
-      color="aqua")
-    
+    if (input$selectcustomer=="All"){
+      errormss=errorall()
+      meanerror=round(mean(errormss$misclass),0)
+      valueBox(
+        value = formatC(meanerror,big.mark = ",",format = "d"),
+        subtitle = paste("Averaged monthly \n error rates- MSS"),
+        color="aqua")
+      
+    }else if (input$selectcustomer!="All") {
+      
+      cust=input$selectcustomer
+      clientInd=unique.alerts$industry[unique.alerts$remedy_customer_id==cust]
+      
+      
+      errorind=errorrateind()
+      errorind=errorind%>%
+        summarise(meanerror=round(mean(misclass),0))
+      meanerror=round(mean(errorind$meanerror),0)
+      
+     
+      
+      avgind=averagealertsind()
+      avgind=avgind %>% 
+        group_by(att_Month) %>% 
+        summarise(Total_Alerts=mean(Status))
+      
+      averageind=round(mean(avgind$Total_Alerts),0)
+      
+      errorpercent=round(meanerror/averageind*100,1)
+      valueBox(
+        value = paste0(meanerror,"(",errorpercent,"%)"),
+        subtitle = paste(clientInd,"Industry averaged monthly error rates"),
+        color="aqua")
+      
+    }
+
   })
   
   output$alert1=renderPlot({
@@ -343,11 +458,8 @@ server=function(input,output,session){
         geom_text(aes(att_Month,misclass,label=misclass),size=4)+theme(legend.position ='none')+
         
         labs(x="Months",y="Misclassification")+ggtitle(label = paste("Misclassifications by month for all customers"))
-      
-      
-      
-      
-    } else if (input$radioalert==5){
+
+          } else if (input$radioalert==5){
       
       ggplot(allalerts,aes(att_Month,Status,fill=att_Month))+geom_bar(stat='identity')+facet_wrap(~ai_alert_soc_status,nrow = 3)+
         theme(legend.position = "none")+geom_text(aes(att_Month,Status,label=Status),size=3)+
@@ -357,10 +469,12 @@ server=function(input,output,session){
     }
     
     } else if(input$selectcustomer!="All") {
-      
+      #browser()
       custchart=customeralert()
       avgcust=averagealertsind()
+      ncust=totalind()
       
+      indcust=nrow(ncust)
       
       if(input$radioalert==1){
         
@@ -368,6 +482,8 @@ server=function(input,output,session){
         avgcust=avgcust%>%
           group_by(att_Month)%>%
           summarise(Avg_Alerts=round(mean(Status),0))
+        
+        
         
         custchart=custchart%>%
           group_by(att_Month)%>%
@@ -380,7 +496,7 @@ server=function(input,output,session){
           #geom_point(data=avgcust,aes(x=att_Month,y=Avg_Alerts,group=1),size=1)+theme_light()+
           geom_line(data=avgcust,aes(x=att_Month,y=Avg_Alerts,group=1),linetype="dashed",color="blue",size=1)+theme(legend.position ='none')+
           geom_text(data=avgcust,aes(att_Month,Avg_Alerts+5,label=Avg_Alerts))+
-          labs(x="Months",y="Total Alerts Generated")+ggtitle(label = paste("Total alerts generated by month for",input$selectcustomer),subtitle = "Dotted line shows average alerts by Industry")
+          labs(x="Months",y="Total Alerts Generated")+ggtitle(label = paste("Total alerts generated by month for",input$selectcustomer),subtitle = paste("Dotted line shows average alerts by Industry, n:",indcust))
         
       }else if(input$radioalert==2) {
         #avgcust gives the average by industry
@@ -418,7 +534,7 @@ server=function(input,output,session){
           #geom_point(data=avgcust,aes(x=att_Month,y=Avg_Alerts,group=1),size=1)+theme_light()+
           geom_line(data=avgcust,aes(x=att_Month,y=avgpercent,group=1),linetype="dashed",color="green",size=1)+theme(legend.position ='none')+
           geom_text(data=avgcust,aes(att_Month,avgpercent,label=paste0(avgpercent,"%")))+
-          labs(x="Months",y="False Positives Percentage")+ggtitle(label = paste("% False Positives by month for",input$selectcustomer),subtitle = "Dotted line shows average % false positives by Industry")
+          labs(x="Months",y="False Positives Percentage")+ggtitle(label = paste("% False Positives by month for",input$selectcustomer),subtitle = paste("Dotted line shows average % false positives by Industry, n:",indcust))
         
       } else if (input$radioalert==3){
         
@@ -448,7 +564,7 @@ server=function(input,output,session){
           #geom_point(data=avgcust,aes(x=att_Month,y=Avg_Alerts,group=1),size=1)+theme_light()+
           geom_line(data=avgcust,aes(x=att_Month,y=Avg_Alerts,group=1),linetype="dashed",color="green",size=1)+theme(legend.position ='none')+
           geom_text(data=avgcust,aes(att_Month,Avg_Alerts,label=Avg_Alerts))+
-          labs(x="Months",y="Escalations")+ggtitle(label = paste("Escalations by month for",input$selectcustomer),subtitle = "Dotted line shows average escalations by Industry")
+          labs(x="Months",y="Escalations")+ggtitle(label = paste("Escalations by month for",input$selectcustomer),subtitle = paste("Dotted line shows average escalations by Industry, n:",indcust))
         
         
       } else if (input$radioalert==4){
@@ -461,7 +577,7 @@ server=function(input,output,session){
           #geom_point(data=avgcust,aes(x=att_Month,y=Avg_Alerts,group=1),size=1)+theme_light()+
           geom_line(data=errorind,aes(x=att_Month,y=misclass,group=1),linetype="dashed",color="green",size=1)+theme(legend.position ='none')+
           geom_text(data=errorind,aes(att_Month,misclass,label=misclass))+
-          labs(x="Months",y="Misclassification")+ggtitle(label = paste("Misclassifications by month for",input$selectcustomer),subtitle = "Dotted line shows total misclassifications by Industry in the analysis period")
+          labs(x="Months",y="Misclassification")+ggtitle(label = paste("Misclassifications by month for",input$selectcustomer),subtitle = paste("Dotted line shows total misclassifications by Industry in the analysis period, n=",indcust))
         
       }else {
         
@@ -471,24 +587,28 @@ server=function(input,output,session){
         
         
       }
-      
-      
-      
-      
-    }
-    
-   
-    
-  })
+}
+    })
   
   output$alerttable=renderDataTable(options = list(pageLength=10),{
     
-    alertcusttable=alertcusttable()
-    alertcusttable%>%
-      select(Alert.ID=ai_alert_id,SOC.Status= ai_alert_soc_status,Date.Time=(attack_start_time))%>%
-      arrange(Date.Time)
+    if (input$selectcustomer=="All"){
+      alertcusttable=alertalltable()
+      alertcusttable%>%
+        select(Alert.ID=ai_alert_id,SOC.Status= ai_alert_soc_status,Date.Time=(attack_start_time))%>%
+        arrange(Date.Time)
+      
+    } else if (input$selectcustomer!="All") {
+      
+      alertcusttable=alertcusttable()
+      alertcusttable%>%
+        select(Alert.ID=ai_alert_id,SOC.Status= ai_alert_soc_status,Date.Time=(attack_start_time))%>%
+        arrange(Date.Time)
+      
+    }
     
   })
+  
 }
 
 shinyApp(ui,server)
