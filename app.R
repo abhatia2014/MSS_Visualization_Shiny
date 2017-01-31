@@ -46,7 +46,12 @@ ui=dashboardPage(
                      tabItem(tabName = "visual1",
                              fluidRow(
                                
-                               infoBoxOutput("custdesc",width = 12)),
+                               infoBoxOutput("custdesc",width = 10),
+                               box(
+                                 width = 2, solidHeader = TRUE,status = "info",align="center",
+                                 downloadButton("report", "Generate report",width=2))
+                               ),
+                               
                              
                              
                              fluidRow(
@@ -85,6 +90,28 @@ ui=dashboardPage(
 
 
 server=function(input,output,session){
+  
+  output$report <- downloadHandler(
+    # For PDF output, change this to "report.pdf"
+    filename = "report.doc",
+    content = function(file) {
+      # Copy the report file to a temporary directory before processing it, in
+      # case we don't have write permissions to the current working dir (which
+      # can happen when deployed).
+      tempReport <- file.path(tempdir(), "report.Rmd")
+      file.copy("report.Rmd", tempReport, overwrite = TRUE)
+      
+      # Set up parameters to pass to Rmd document
+      params <- list(client = input$selectcustomer,period1=input$alertdate[1],period2=input$alertdate[2])
+      
+      # Knit the document, passing in the `params` list, and eval it in a
+      # child of the global environment (this isolates the code in the document
+      # from the code in this app).
+      rmarkdown::render(tempReport, output_file = file,
+                        params = params,
+                        envir = new.env(parent = globalenv())
+      )
+    })
   
   totalalert=reactive({
     period1=input$alertdate[1]

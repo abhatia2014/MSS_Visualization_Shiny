@@ -1,0 +1,14 @@
+---
+title: "Client Report"
+output: word_document
+params:
+  client: NA
+  period1: NA
+  period2: NA
+---
+
+A report of all alerts for `r params$client ` in the analysis period `r params$period1 ` to `r params$period2 `
+
+```{r}
+
+```
